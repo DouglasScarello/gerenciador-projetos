@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Cursor de espera durante operações assíncronas */
+body.carregando {
+  cursor: wait;
+}
