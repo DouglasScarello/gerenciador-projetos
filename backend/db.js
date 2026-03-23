@@ -12,6 +12,9 @@ pool.on('error', (err) => {
   console.error('Erro inesperado no pool do PostgreSQL', err);
 });
 
-module.exports = { pool };
+module.exports = {
+  pool,
+  getClient: () => pool.connect()
+};
 
 

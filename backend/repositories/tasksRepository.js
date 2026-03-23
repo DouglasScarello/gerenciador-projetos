@@ -1,8 +1,9 @@
 const { pool } = require('../db');
 
 const tasksRepository = {
-    async create(description, status, projectId) {
-        const { rows } = await pool.query(
+    async create(description, status, projectId, dbClient = null) {
+        const client = dbClient || pool;
+        const { rows } = await client.query(
             'INSERT INTO tasks(description, status, project_id) VALUES($1, $2, $3) RETURNING *',
             [description, status || 'todo', projectId]
         );

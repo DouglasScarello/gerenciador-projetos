@@ -1,8 +1,9 @@
 const { pool } = require('../db');
 
 const projectsRepository = {
-    async create(title, description, status, ownerId) {
-        const { rows } = await pool.query(
+    async create(title, description, status, ownerId, dbClient = null) {
+        const client = dbClient || pool;
+        const { rows } = await client.query(
             'INSERT INTO projects(title, description, status, owner_id) VALUES($1, $2, $3, $4) RETURNING *',
             [title, description, status, ownerId]
         );
