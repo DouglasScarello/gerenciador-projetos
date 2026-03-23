@@ -1,4 +1,5 @@
 const projectsRepository = require('../repositories/projectsRepository');
+const AppError = require('../utils/AppError');
 
 const ALLOWED_STATUSES = ['todo', 'in_progress', 'done'];
 
@@ -8,11 +9,11 @@ const projectsService = {
         const normalizedStatus = status || 'todo';
 
         if (!title || typeof title !== 'string' || title.trim().length === 0) {
-            throw { status: 400, message: 'Título é obrigatório' };
+            throw new AppError('Título é obrigatório', 400);
         }
 
         if (!ALLOWED_STATUSES.includes(normalizedStatus)) {
-            throw { status: 400, message: 'Status inválido' };
+            throw new AppError('Status inválido', 400);
         }
 
         let normalizedDescription = null;
@@ -24,19 +25,22 @@ const projectsService = {
         return await projectsRepository.create(title.trim(), normalizedDescription, normalizedStatus, userId);
     },
 
-    async listUserProjects(userId) {
-        return await projectsRepository.findAllByOwner(userId);
+    async listUserProjects(userId, queryParams = {}) {
+        const limit = parseInt(queryParams.limit, 10) || 20;
+        const offset = parseInt(queryParams.offset, 10) || 0;
+
+        return await projectsRepository.findAllByOwner(userId, limit, offset);
     },
 
     async updateProject(projectId, userId, data) {
         const { title, description, status } = data;
 
         if (status && !ALLOWED_STATUSES.includes(status)) {
-            throw { status: 400, message: 'Status inválido' };
+            throw new AppError('Status inválido', 400);
         }
 
         if (title !== undefined && (typeof title !== 'string' || title.trim().length === 0)) {
-            throw { status: 400, message: 'Título não pode ser vazio' };
+            throw new AppError('Título não pode ser vazio', 400);
         }
 
         const updates = [];
@@ -59,14 +63,14 @@ const projectsService = {
         }
 
         if (updates.length === 0) {
-            throw { status: 400, message: 'Nenhum campo para atualizar' };
+            throw new AppError('Nenhum campo para atualizar', 400);
         }
 
         values.push(projectId, userId);
 
         const updated = await projectsRepository.update(projectId, userId, updates, values);
         if (!updated) {
-            throw { status: 404, message: 'Projeto não encontrado' };
+            throw new AppError('Projeto não encontrado', 404);
         }
         return updated;
     },
@@ -74,7 +78,7 @@ const projectsService = {
     async deleteProject(projectId, userId) {
         const success = await projectsRepository.delete(projectId, userId);
         if (!success) {
-            throw { status: 404, message: 'Projeto não encontrado' };
+            throw new AppError('Projeto não encontrado', 404);
         }
         return true;
     }
