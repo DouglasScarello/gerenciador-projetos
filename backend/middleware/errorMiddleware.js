@@ -1,19 +1,22 @@
-const AppError = require('../utils/AppError');
+const logger = require('../utils/logger');
 
 const errorMiddleware = (err, req, res, next) => {
     err.status = err.status || 500;
     err.message = err.message || 'Erro interno do servidor';
 
-    // Log de erros não operacionais (bugs reais)
-    if (!err.isOperational) {
-        console.error('💥 ERRO CRÍTICO:', err);
+    if (err.status >= 500) {
+        logger.error(`${err.status} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip} - ${err.stack}`);
+    } else {
+        logger.warn(`${err.status} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
     }
 
     res.status(err.status).json({
-        status: err.status,
-        message: err.message,
-        // Em desenvolvimento, podemos enviar o stack para o cliente (opcional)
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+        success: false,
+        error: {
+            message: err.message,
+            code: err.code || 'INTERNAL_ERROR',
+            ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+        },
     });
 };
 
