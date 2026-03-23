@@ -21,7 +21,6 @@ export default function Login() {
   async function onSubmit(values) {
     try {
       const { data } = await api.post('/auth/login', values)
-      localStorage.setItem('token', data.token)
       toast.success('Bem-vindo!')
       navigate('/projects')
     } catch (err) {
