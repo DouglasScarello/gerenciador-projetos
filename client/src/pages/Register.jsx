@@ -28,7 +28,7 @@ export default function Register() {
       toast.success('Conta criada! Faça login.')
       navigate('/login')
     } catch (err) {
-      const msg = err.response?.data?.message || 'Erro ao registrar'
+      const msg = err.response?.data?.error?.message || 'Erro ao registrar'
       toast.error(msg)
     }
   }

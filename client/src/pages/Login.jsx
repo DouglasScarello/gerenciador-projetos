@@ -24,7 +24,7 @@ export default function Login() {
       toast.success('Bem-vindo!')
       navigate('/projects')
     } catch (err) {
-      const msg = err.response?.data?.message || 'Erro ao entrar'
+      const msg = err.response?.data?.error?.message || 'Erro ao entrar'
       toast.error(msg)
     }
   }

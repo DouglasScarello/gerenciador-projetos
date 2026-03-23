@@ -3,67 +3,66 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const validator = require('validator');
 const { pool } = require('../db');
+const auth = require('../middleware/auth');
+const catchAsync = require('../utils/catchAsync');
+const AppError = require('../utils/AppError');
+const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
-const rateLimit = require('express-rate-limit');
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10, // Máximo de 10 tentativas por 15 min
-  message: { message: 'Muitas tentativas de login. Tente novamente em 15 minutos.' }
+  max: 10,
+  message: { success: false, error: { message: 'Muitas tentativas de login. Tente novamente em 15 minutos.', code: 'TOO_MANY_REQUESTS' } }
 });
 
-router.post('/register', async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
+router.post('/register', catchAsync(async (req, res) => {
+  const { name, email, password } = req.body;
 
-    if (!email || !validator.isEmail(email)) {
-      return res.status(400).json({ message: 'Email inválido' });
-    }
-
-    const { rowCount } = await pool.query('SELECT 1 FROM users WHERE email = $1', [email]);
-    if (rowCount > 0) return res.status(400).json({ message: 'Email já cadastrado' });
-    const passwordHash = await bcrypt.hash(password, 10);
-    const { rows } = await pool.query(
-      'INSERT INTO users(name, email, password_hash) VALUES($1, $2, $3) RETURNING id, name, email',
-      [name, email, passwordHash]
-    );
-    return res.status(201).json(rows[0]);
-  } catch (err) {
-    return res.status(500).json({ message: 'Erro no registro', error: err.message });
+  if (!email || !validator.isEmail(email)) {
+    throw new AppError('Email inválido', 400);
   }
-});
 
-router.post('/login', loginLimiter, async (req, res) => {
-  try {
-    const { email, password } = req.body;
+  const { rowCount } = await pool.query('SELECT 1 FROM users WHERE email = $1', [email]);
+  if (rowCount > 0) throw new AppError('Email já cadastrado', 400);
 
-    if (!email || !validator.isEmail(email)) {
-      return res.status(400).json({ message: 'Email inválido' });
-    }
+  const passwordHash = await bcrypt.hash(password, 10);
+  const { rows } = await pool.query(
+    'INSERT INTO users(name, email, password_hash) VALUES($1, $2, $3) RETURNING id, name, email',
+    [name, email, passwordHash]
+  );
 
-    const { rows } = await pool.query('SELECT id, name, email, password_hash FROM users WHERE email = $1', [email]);
-    const user = rows[0];
-    if (!user) return res.status(401).json({ message: 'Credenciais inválidas' });
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.status(401).json({ message: 'Credenciais inválidas' });
-    const secret = process.env.JWT_SECRET;
-    if (!secret) throw new Error('JWT_SECRET não configurado no servidor');
+  res.status(201).json({ success: true, data: rows[0] });
+}));
 
-    const token = jwt.sign({ userId: user.id }, secret, { expiresIn: '7d' });
+router.post('/login', loginLimiter, catchAsync(async (req, res) => {
+  const { email, password } = req.body;
 
-    return res
-      .cookie('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias
-      })
-      .json({ user: { id: user.id, name: user.name, email: user.email } });
-  } catch (err) {
-    return res.status(500).json({ message: 'Erro no login', error: err.message });
+  if (!email || !validator.isEmail(email)) {
+    throw new AppError('Email inválido', 400);
   }
-});
+
+  const { rows } = await pool.query('SELECT id, name, email, password_hash FROM users WHERE email = $1', [email]);
+  const user = rows[0];
+
+  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    throw new AppError('Credenciais inválidas', 401);
+  }
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET não configurado no servidor');
+
+  const token = jwt.sign({ userId: user.id }, secret, { expiresIn: '7d' });
+
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  });
+
+  res.json({ success: true, data: { id: user.id, name: user.name, email: user.email } });
+}));
 
 router.post('/logout', (req, res) => {
   res.clearCookie('token', {
@@ -73,16 +72,10 @@ router.post('/logout', (req, res) => {
   }).json({ success: true });
 });
 
-router.get('/me', require('../middleware/auth'), async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [req.userId]);
-    if (!rows[0]) return res.status(404).json({ message: 'Usuário não encontrado' });
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ message: 'Erro ao buscar usuário', error: err.message });
-  }
-});
+router.get('/me', auth, catchAsync(async (req, res) => {
+  const { rows } = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [req.userId]);
+  if (!rows[0]) throw new AppError('Usuário não encontrado', 404);
+  res.json({ success: true, data: rows[0] });
+}));
 
 module.exports = router;
-
-
