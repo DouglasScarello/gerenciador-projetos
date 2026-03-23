@@ -2,10 +2,20 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
+const logger = require('./utils/logger');
 
 dotenv.config();
 
 const app = express();
+
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { message: 'Muitas requisições deste IP, tente novamente mais tarde.' }
+});
+
+app.use(globalLimiter);
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(cookieParser());

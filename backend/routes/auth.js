@@ -5,6 +5,13 @@ const validator = require('validator');
 const { pool } = require('../db');
 
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10, // Máximo de 10 tentativas por 15 min
+  message: { message: 'Muitas tentativas de login. Tente novamente em 15 minutos.' }
+});
 
 router.post('/register', async (req, res) => {
   try {
@@ -27,7 +34,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
