@@ -1,14 +1,16 @@
 const tasksRepository = require('../repositories/tasksRepository');
 const projectsRepository = require('../repositories/projectsRepository');
 const AppError = require('../utils/AppError');
+const { z } = require('zod');
+
+const taskSchema = z.object({
+    description: z.string().min(1, 'Descrição é obrigatória').trim(),
+    status: z.enum(['todo', 'done']).default('todo'),
+});
 
 const tasksService = {
     async createTask(projectId, data, userId) {
-        const { description, status } = data;
-
-        if (!description || typeof description !== 'string' || description.trim().length === 0) {
-            throw new AppError('Descrição da tarefa é obrigatória', 400);
-        }
+        const validated = taskSchema.parse(data);
 
         // Validar se o projeto pertence ao usuário
         const project = await projectsRepository.findByIdAndOwner(projectId, userId);
@@ -16,7 +18,7 @@ const tasksService = {
             throw new AppError('Projeto não encontrado ou acesso negado', 404);
         }
 
-        return await tasksRepository.create(description.trim(), status, projectId);
+        return await tasksRepository.create(validated.description, validated.status, projectId);
     },
 
     async listTasks(projectId, userId) {
@@ -29,13 +31,10 @@ const tasksService = {
     },
 
     async updateTask(taskId, data, userId) {
-        const { description, status } = data;
+        const updateSchema = taskSchema.partial();
+        const validated = updateSchema.parse(data);
 
-        if (description !== undefined && (typeof description !== 'string' || description.trim().length === 0)) {
-            throw new AppError('Descrição não pode ser vazia', 400);
-        }
-
-        const updated = await tasksRepository.update(taskId, description?.trim(), status, userId);
+        const updated = await tasksRepository.update(taskId, validated.description, validated.status, userId);
         if (!updated) {
             throw new AppError('Tarefa não encontrada', 404);
         }

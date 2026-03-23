@@ -1,28 +1,17 @@
 const projectsRepository = require('../repositories/projectsRepository');
 const AppError = require('../utils/AppError');
+const { z } = require('zod');
 
-const ALLOWED_STATUSES = ['todo', 'in_progress', 'done'];
+const projectSchema = z.object({
+    title: z.string().min(1, 'Título é obrigatório').trim(),
+    description: z.string().optional().nullable().transform(val => val?.trim() || null),
+    status: z.enum(['todo', 'in_progress', 'done']).default('todo'),
+});
 
 const projectsService = {
     async createProject(data, userId) {
-        const { title, description, status } = data;
-        const normalizedStatus = status || 'todo';
-
-        if (!title || typeof title !== 'string' || title.trim().length === 0) {
-            throw new AppError('Título é obrigatório', 400);
-        }
-
-        if (!ALLOWED_STATUSES.includes(normalizedStatus)) {
-            throw new AppError('Status inválido', 400);
-        }
-
-        let normalizedDescription = null;
-        if (description !== undefined && description !== null) {
-            const trimmed = String(description).trim();
-            normalizedDescription = trimmed.length > 0 ? trimmed : null;
-        }
-
-        return await projectsRepository.create(title.trim(), normalizedDescription, normalizedStatus, userId);
+        const validated = projectSchema.parse(data);
+        return await projectsRepository.create(validated.title, validated.description, validated.status, userId);
     },
 
     async listUserProjects(userId, queryParams = {}) {
@@ -33,34 +22,17 @@ const projectsService = {
     },
 
     async updateProject(projectId, userId, data) {
-        const { title, description, status } = data;
-
-        if (status && !ALLOWED_STATUSES.includes(status)) {
-            throw new AppError('Status inválido', 400);
-        }
-
-        if (title !== undefined && (typeof title !== 'string' || title.trim().length === 0)) {
-            throw new AppError('Título não pode ser vazio', 400);
-        }
+        const updateSchema = projectSchema.partial();
+        const validated = updateSchema.parse(data);
 
         const updates = [];
         const values = [];
         let paramIndex = 1;
 
-        if (title !== undefined) {
-            updates.push(`title = $${paramIndex++}`);
-            values.push(title.trim());
-        }
-
-        if (description !== undefined) {
-            updates.push(`description = $${paramIndex++}`);
-            values.push(description === null || description === '' ? null : description);
-        }
-
-        if (status !== undefined) {
-            updates.push(`status = $${paramIndex++}`);
-            values.push(status);
-        }
+        Object.keys(validated).forEach(key => {
+            updates.push(`${key} = $${paramIndex++}`);
+            values.push(validated[key]);
+        });
 
         if (updates.length === 0) {
             throw new AppError('Nenhum campo para atualizar', 400);

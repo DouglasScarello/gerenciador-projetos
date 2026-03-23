@@ -9,17 +9,17 @@ router.use(auth);
 
 router.post('/', catchAsync(async (req, res) => {
   const project = await projectsService.createProject(req.body, req.userId);
-  res.status(201).json(project);
+  res.status(201).json({ success: true, data: project });
 }));
 
 router.get('/', catchAsync(async (req, res) => {
   const projects = await projectsService.listUserProjects(req.userId, req.query);
-  res.json(projects);
+  res.json({ success: true, data: projects });
 }));
 
 router.put('/:id', catchAsync(async (req, res) => {
   const project = await projectsService.updateProject(req.params.id, req.userId, req.body);
-  res.json(project);
+  res.json({ success: true, data: project });
 }));
 
 router.delete('/:id', catchAsync(async (req, res) => {
