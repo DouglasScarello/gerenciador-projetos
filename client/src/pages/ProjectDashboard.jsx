@@ -51,25 +51,72 @@ export default function ProjectDashboard() {
     }
   })
 
+  // ⚡ OPTIMISTIC UPDATE: Mover Ticket
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => api.put(`/projetos/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      toast.success('Ticket atualizado!')
+    onMutate: async ({ id, data }) => {
+      // Cancelar refetches em andamento
+      await queryClient.cancelQueries({ queryKey: ['projects'] })
+
+      // Salvar estado anterior para rollback
+      const previousData = queryClient.getQueryData(['projects'])
+
+      // Aplicar update otimista no cache
+      queryClient.setQueryData(['projects'], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          data: old.data.map((ticket) =>
+            String(getTicketId(ticket)) === String(id)
+              ? { ...ticket, ...data }
+              : ticket
+          )
+        }
+      })
+
+      return { previousData }
     },
-    onError: (err) => {
+    onError: (err, variables, context) => {
+      // Rollback se falhar
+      if (context?.previousData) {
+        queryClient.setQueryData(['projects'], context.previousData)
+      }
       toast.error(err.response?.data?.error?.message || 'Erro ao atualizar')
+    },
+    onSettled: () => {
+      // Sincronizar com o servidor no final
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
     }
   })
 
+  // ⚡ OPTIMISTIC UPDATE: Deletar Ticket
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/projetos/${id}`),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['projects'] })
+      const previousData = queryClient.getQueryData(['projects'])
+
+      queryClient.setQueryData(['projects'], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          data: old.data.filter((ticket) => String(getTicketId(ticket)) !== String(id))
+        }
+      })
+
+      return { previousData }
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
       toast.success('Ticket removido')
     },
-    onError: (err) => {
+    onError: (err, id, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(['projects'], context.previousData)
+      }
       toast.error(err.response?.data?.error?.message || 'Erro ao remover')
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
     }
   })
 
@@ -273,10 +320,14 @@ export default function ProjectDashboard() {
                   const canMoveBackward = stageOrder.indexOf(stage.key) > 0
                   const canMoveForward = stageOrder.indexOf(stage.key) < stageOrder.length - 1
 
+                  // 🎯 Loading Granular Sênior
+                  const isUpdating = updateMutation.isPending && String(updateMutation.variables?.id) === String(ticketId)
+                  const isDeleting = deleteMutation.isPending && String(deleteMutation.variables) === String(ticketId)
+
                   return (
                     <article
                       key={ticketId}
-                      className={`ticket-card ticket-card--${stage.key}${String(ticketId) === draggingTicketId ? ' is-dragging' : ''}`}
+                      className={`ticket-card ticket-card--${stage.key}${String(ticketId) === draggingTicketId ? ' is-dragging' : ''}${isDeleting ? ' is-deleting' : ''}`}
                       draggable
                       onDragStart={(event) => handleDragStart(event, ticket)}
                       onDragEnd={handleDragEnd}
@@ -288,23 +339,23 @@ export default function ProjectDashboard() {
                           type="button"
                           className="ghost-button"
                           onClick={() => handleMoveTicket(ticket, -1)}
-                          disabled={!canMoveBackward || updateMutation.isPending}
+                          disabled={!canMoveBackward || isUpdating || isDeleting}
                         >
-                          ← Voltar
+                          {isUpdating ? '...' : '←'}
                         </button>
-                        <button type="button" className="ghost-button" onClick={() => openEditModal(ticket)}>
+                        <button type="button" className="ghost-button" onClick={() => openEditModal(ticket)} disabled={isUpdating || isDeleting}>
                           Detalhes
                         </button>
-                        <button type="button" className="danger-button" onClick={() => handleDeleteTicket(ticket)} disabled={deleteMutation.isPending}>
-                          Excluir
+                        <button type="button" className="danger-button" onClick={() => handleDeleteTicket(ticket)} disabled={isDeleting || isUpdating}>
+                          {isDeleting ? 'Excluindo...' : 'Excluir'}
                         </button>
                         <button
                           type="button"
                           className="ghost-button"
                           onClick={() => handleMoveTicket(ticket, 1)}
-                          disabled={!canMoveForward || updateMutation.isPending}
+                          disabled={!canMoveForward || isUpdating || isDeleting}
                         >
-                          Avançar →
+                          {isUpdating ? '...' : '→'}
                         </button>
                       </div>
                     </article>
