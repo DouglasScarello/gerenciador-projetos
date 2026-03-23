@@ -63,7 +63,7 @@ export default function ProjectDashboard() {
   async function handleCreateTicket(event) {
     event.preventDefault()
     setError('')
-    
+
     const trimmedTitle = formValues.title?.trim() || ''
     if (!trimmedTitle) {
       setError('O título é obrigatório')
@@ -78,21 +78,18 @@ export default function ProjectDashboard() {
         description: trimmedDescription && trimmedDescription.length > 0 ? trimmedDescription : undefined,
         status: 'todo',
       }
-      
-      console.log('Criando ticket com payload:', payload)
+
       const response = await api.post('/projetos', payload)
-      console.log('Resposta do servidor:', response)
-      console.log('Response data:', response.data)
-      
-      // Se chegou aqui, a criação foi bem-sucedida
+      const newTicket = response.data
+
+      setTickets((prev) => [newTicket, ...prev])
       setFormValues({ title: '', description: '' })
-      await loadTickets()
     } catch (err) {
       console.error('Erro completo ao criar ticket:', err)
       console.error('Response:', err.response)
       console.error('Data:', err.response?.data)
       console.error('Status:', err.response?.status)
-      
+
       let errorMessage = 'Não foi possível criar o ticket.'
       if (err.response?.data?.message) {
         errorMessage = err.response.data.message
@@ -101,7 +98,7 @@ export default function ProjectDashboard() {
       } else if (err.message) {
         errorMessage = err.message
       }
-      
+
       setError(errorMessage)
     } finally {
       setIsSubmitting(false)
@@ -122,7 +119,7 @@ export default function ProjectDashboard() {
     try {
       setError('')
       await api.delete(`/projetos/${ticketId}`)
-      await loadTickets()
+      setTickets((prev) => prev.filter((t) => getTicketId(t) !== ticketId))
     } catch (err) {
       console.error('Erro ao excluir ticket:', err)
       const errorMessage = err.response?.data?.message || err.message || 'Erro ao excluir o ticket.'
@@ -146,9 +143,8 @@ export default function ProjectDashboard() {
     try {
       setError('')
       const response = await api.put(`/projetos/${ticketId}`, { status: nextStage })
-      if (response.data) {
-        await loadTickets()
-      }
+      const updatedTicket = response.data
+      setTickets((prev) => prev.map((t) => getTicketId(t) === ticketId ? updatedTicket : t))
     } catch (err) {
       console.error('Erro ao mover ticket:', err)
       const errorMessage = err.response?.data?.message || err.message || 'Não foi possível atualizar o status.'
@@ -210,9 +206,8 @@ export default function ProjectDashboard() {
     try {
       setError('')
       const response = await api.put(`/projetos/${ticketId}`, { status: stageKey })
-      if (response.data) {
-        await loadTickets()
-      }
+      const updatedTicket = response.data
+      setTickets((prev) => prev.map((t) => String(getTicketId(t)) === String(ticketId) ? updatedTicket : t))
     } catch (err) {
       console.error('Erro ao mover ticket por drag:', err)
       const errorMessage = err.response?.data?.message || err.message || 'Não foi possível atualizar o status.'
@@ -256,10 +251,9 @@ export default function ProjectDashboard() {
         title: editingValues.title.trim(),
         description: editingValues.description?.trim() || '',
       })
-      if (response.data) {
-        closeEditModal()
-        await loadTickets()
-      }
+      const updatedTicket = response.data
+      setTickets((prev) => prev.map((t) => getTicketId(t) === ticketId ? updatedTicket : t))
+      closeEditModal()
     } catch (err) {
       console.error('Erro ao salvar edição:', err)
       const errorMessage = err.response?.data?.message || err.message || 'Não foi possível salvar as alterações.'
@@ -268,9 +262,14 @@ export default function ProjectDashboard() {
     }
   }
 
-  function logout() {
-    localStorage.removeItem('token')
-    navigate('/login')
+  async function logout() {
+    try {
+      await api.post('/auth/logout')
+    } catch (err) {
+      console.error('Erro ao fazer logout:', err)
+    } finally {
+      navigate('/login')
+    }
   }
 
   return (
