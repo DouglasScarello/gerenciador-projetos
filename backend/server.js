@@ -21,6 +21,9 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/projetos', require('./routes/projects'));
 app.use('/api/tarefas', require('./routes/tasks'));
 
+const errorMiddleware = require('./middleware/errorMiddleware');
+app.use(errorMiddleware);
+
 const PORT = process.env.PORT || 5000;
 
 pool.connect()
