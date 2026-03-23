@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
+import toast from 'react-hot-toast'
 import './ProjectDashboard.css'
 
 const STAGES = [
@@ -17,20 +19,62 @@ function getTicketId(ticket) {
 
 export default function ProjectDashboard() {
   const navigate = useNavigate()
-  const [tickets, setTickets] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
+  const queryClient = useQueryClient()
+
   const [formValues, setFormValues] = useState({ title: '', description: '' })
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingTicket, setEditingTicket] = useState(null)
   const [editingValues, setEditingValues] = useState({ title: '', description: '' })
-  const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [draggingTicketId, setDraggingTicketId] = useState(null)
   const [activeDropStage, setActiveDropStage] = useState(null)
 
+  // Fetching tickets with React Query
+  const { data: response, isLoading, error: fetchError } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const res = await api.get('/projetos')
+      return res.data // { success: true, data: [...] }
+    }
+  })
+
+  const tickets = response?.data || []
+
+  // Mutations
+  const createMutation = useMutation({
+    mutationFn: (newTicket) => api.post('/projetos', newTicket),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      toast.success('Ticket criado com sucesso!')
+      setFormValues({ title: '', description: '' })
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.error?.message || 'Erro ao criar ticket')
+    }
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/projetos/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      toast.success('Ticket atualizado!')
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.error?.message || 'Erro ao atualizar')
+    }
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/projetos/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      toast.success('Ticket removido')
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.error?.message || 'Erro ao remover')
+    }
+  })
+
   useEffect(() => {
     document.body.style.backgroundColor = '#f0f2f5'
-    loadTickets()
     return () => {
       document.body.style.backgroundColor = ''
     }
@@ -43,119 +87,43 @@ export default function ProjectDashboard() {
     }, {})
   }, [tickets])
 
-  async function loadTickets() {
-    try {
-      setIsLoading(true)
-      const { data } = await api.get('/projetos')
-      setTickets(data)
-      setError('')
-    } catch (err) {
-      if (err.response?.status === 401) {
-        navigate('/login')
-        return
-      }
-      setError(err.response?.data?.message || 'Não foi possível carregar os tickets.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   async function handleCreateTicket(event) {
     event.preventDefault()
-    setError('')
-
     const trimmedTitle = formValues.title?.trim() || ''
     if (!trimmedTitle) {
-      setError('O título é obrigatório')
+      toast.error('O título é obrigatório')
       return
     }
 
-    try {
-      setIsSubmitting(true)
-      const trimmedDescription = formValues.description?.trim()
-      const payload = {
-        title: trimmedTitle,
-        description: trimmedDescription && trimmedDescription.length > 0 ? trimmedDescription : undefined,
-        status: 'todo',
-      }
-
-      const response = await api.post('/projetos', payload)
-      const newTicket = response.data
-
-      setTickets((prev) => [newTicket, ...prev])
-      setFormValues({ title: '', description: '' })
-    } catch (err) {
-      console.error('Erro completo ao criar ticket:', err)
-      console.error('Response:', err.response)
-      console.error('Data:', err.response?.data)
-      console.error('Status:', err.response?.status)
-
-      let errorMessage = 'Não foi possível criar o ticket.'
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message
-      } else if (err.response?.data?.error) {
-        errorMessage = err.response.data.error
-      } else if (err.message) {
-        errorMessage = err.message
-      }
-
-      setError(errorMessage)
-    } finally {
-      setIsSubmitting(false)
-    }
+    createMutation.mutate({
+      title: trimmedTitle,
+      description: formValues.description?.trim() || null,
+      status: 'todo',
+    })
   }
 
   async function handleDeleteTicket(ticket) {
     const ticketId = getTicketId(ticket)
-    if (!ticketId) {
-      setError('ID do ticket não encontrado')
-      return
-    }
-
-    if (!window.confirm('Tem certeza que deseja excluir este ticket?')) {
-      return
-    }
-
-    try {
-      setError('')
-      await api.delete(`/projetos/${ticketId}`)
-      setTickets((prev) => prev.filter((t) => getTicketId(t) !== ticketId))
-    } catch (err) {
-      console.error('Erro ao excluir ticket:', err)
-      const errorMessage = err.response?.data?.message || err.message || 'Erro ao excluir o ticket.'
-      setError(errorMessage)
+    if (!ticketId) return
+    if (window.confirm('Tem certeza que deseja excluir este ticket?')) {
+      deleteMutation.mutate(ticketId)
     }
   }
 
   async function handleMoveTicket(ticket, direction) {
     const ticketId = getTicketId(ticket)
-    if (!ticketId) {
-      setError('ID do ticket não encontrado')
-      return
-    }
+    if (!ticketId) return
 
     const currentIndex = stageOrder.indexOf(ticket.status || 'todo')
     const nextStage = stageOrder[currentIndex + direction]
-    if (!nextStage) {
-      return
-    }
+    if (!nextStage) return
 
-    try {
-      setError('')
-      const response = await api.put(`/projetos/${ticketId}`, { status: nextStage })
-      const updatedTicket = response.data
-      setTickets((prev) => prev.map((t) => getTicketId(t) === ticketId ? updatedTicket : t))
-    } catch (err) {
-      console.error('Erro ao mover ticket:', err)
-      const errorMessage = err.response?.data?.message || err.message || 'Não foi possível atualizar o status.'
-      setError(errorMessage)
-    }
+    updateMutation.mutate({ id: ticketId, data: { status: nextStage } })
   }
 
   function handleDragStart(event, ticket) {
     const ticketId = getTicketId(ticket)
     if (!ticketId) return
-
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', String(ticketId))
     setDraggingTicketId(String(ticketId))
@@ -169,18 +137,13 @@ export default function ProjectDashboard() {
   function handleDragEnter(event, stageKey) {
     event.preventDefault()
     if (!draggingTicketId) return
-
     setActiveDropStage(stageKey)
   }
 
   function handleDragLeave(event, stageKey) {
     if (!draggingTicketId) return
-
     const relatedTarget = event.relatedTarget
-    if (relatedTarget && event.currentTarget.contains(relatedTarget)) {
-      return
-    }
-
+    if (relatedTarget && event.currentTarget.contains(relatedTarget)) return
     setActiveDropStage((current) => (current === stageKey ? null : current))
   }
 
@@ -188,31 +151,12 @@ export default function ProjectDashboard() {
     event.preventDefault()
     const ticketId = event.dataTransfer.getData('text/plain')
     setActiveDropStage(null)
-    if (!ticketId) {
-      return
-    }
+    if (!ticketId) return
 
     const ticket = tickets.find((item) => String(getTicketId(item)) === ticketId)
-    if (!ticket) {
-      setError('Ticket não encontrado')
-      return
-    }
+    if (!ticket || (ticket.status || 'todo') === stageKey) return
 
-    const currentStage = ticket.status || 'todo'
-    if (currentStage === stageKey) {
-      return
-    }
-
-    try {
-      setError('')
-      const response = await api.put(`/projetos/${ticketId}`, { status: stageKey })
-      const updatedTicket = response.data
-      setTickets((prev) => prev.map((t) => String(getTicketId(t)) === String(ticketId) ? updatedTicket : t))
-    } catch (err) {
-      console.error('Erro ao mover ticket por drag:', err)
-      const errorMessage = err.response?.data?.message || err.message || 'Não foi possível atualizar o status.'
-      setError(errorMessage)
-    }
+    updateMutation.mutate({ id: ticketId, data: { status: stageKey } })
   }
 
   function openEditModal(ticket) {
@@ -226,48 +170,31 @@ export default function ProjectDashboard() {
   function closeEditModal() {
     setEditingTicket(null)
     setEditingValues({ title: '', description: '' })
-    setIsSavingEdit(false)
   }
 
   async function handleEditSubmit(event) {
     event.preventDefault()
     if (!editingTicket) return
-
     const ticketId = getTicketId(editingTicket)
-    if (!ticketId) {
-      setError('ID do ticket não encontrado')
-      return
-    }
+    if (!ticketId) return
 
-    if (!editingValues.title || !editingValues.title.trim()) {
-      setError('O título é obrigatório')
-      return
-    }
-
-    try {
-      setIsSavingEdit(true)
-      setError('')
-      const response = await api.put(`/projetos/${ticketId}`, {
+    updateMutation.mutate({
+      id: ticketId,
+      data: {
         title: editingValues.title.trim(),
-        description: editingValues.description?.trim() || '',
-      })
-      const updatedTicket = response.data
-      setTickets((prev) => prev.map((t) => getTicketId(t) === ticketId ? updatedTicket : t))
-      closeEditModal()
-    } catch (err) {
-      console.error('Erro ao salvar edição:', err)
-      const errorMessage = err.response?.data?.message || err.message || 'Não foi possível salvar as alterações.'
-      setError(errorMessage)
-      setIsSavingEdit(false)
-    }
+        description: editingValues.description?.trim() || null
+      }
+    })
+    closeEditModal()
   }
 
   async function logout() {
     try {
       await api.post('/auth/logout')
+      toast.success('Até logo!')
+      navigate('/login')
     } catch (err) {
       console.error('Erro ao fazer logout:', err)
-    } finally {
       navigate('/login')
     }
   }
@@ -287,7 +214,6 @@ export default function ProjectDashboard() {
 
         <section className="create-card">
           <h2>Novo ticket</h2>
-          <p>Descreva rapidamente o que precisa ser feito. Ele começa em “Para fazer”.</p>
           <form className="create-form" onSubmit={handleCreateTicket}>
             <div className="form-field">
               <label htmlFor="ticket-title">Título</label>
@@ -306,27 +232,24 @@ export default function ProjectDashboard() {
                 id="ticket-description"
                 value={formValues.description}
                 onChange={(event) => setFormValues((state) => ({ ...state, description: event.target.value }))}
-                placeholder="Adicione detalhes, links ou anotações importantes"
+                placeholder="Adicione detalhes importantes"
                 rows={3}
               />
             </div>
-            <button type="submit" className="primary-button" disabled={isSubmitting || !formValues.title.trim()}>
-              {isSubmitting ? 'Criando...' : 'Criar ticket'}
+            <button type="submit" className="primary-button" disabled={createMutation.isPending || !formValues.title.trim()}>
+              {createMutation.isPending ? 'Criando...' : 'Criar ticket'}
             </button>
           </form>
         </section>
 
-        {error && <div className="error-banner">{error}</div>}
+        {fetchError && <div className="error-banner">Erro ao carregar tickets.</div>}
 
         <section className="board">
           {STAGES.map((stage) => (
             <div
               key={stage.key}
               className={`ticket-column${activeDropStage === stage.key ? ' ticket-column--droppable' : ''}`}
-              onDragOver={(event) => {
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'move'
-              }}
+              onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => handleDrop(event, stage.key)}
               onDragEnter={(event) => handleDragEnter(event, stage.key)}
               onDragLeave={(event) => handleDragLeave(event, stage.key)}
@@ -365,21 +288,21 @@ export default function ProjectDashboard() {
                           type="button"
                           className="ghost-button"
                           onClick={() => handleMoveTicket(ticket, -1)}
-                          disabled={!canMoveBackward}
+                          disabled={!canMoveBackward || updateMutation.isPending}
                         >
                           ← Voltar
                         </button>
                         <button type="button" className="ghost-button" onClick={() => openEditModal(ticket)}>
                           Detalhes
                         </button>
-                        <button type="button" className="danger-button" onClick={() => handleDeleteTicket(ticket)}>
+                        <button type="button" className="danger-button" onClick={() => handleDeleteTicket(ticket)} disabled={deleteMutation.isPending}>
                           Excluir
                         </button>
                         <button
                           type="button"
                           className="ghost-button"
                           onClick={() => handleMoveTicket(ticket, 1)}
-                          disabled={!canMoveForward}
+                          disabled={!canMoveForward || updateMutation.isPending}
                         >
                           Avançar →
                         </button>
@@ -390,41 +313,32 @@ export default function ProjectDashboard() {
               </div>
             </div>
           ))}
-        </section>
-      </div>
+        </section> board
+      </div> dashboard-container
 
       {editingTicket && (
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-card">
-            <button type="button" className="modal-close" onClick={closeEditModal} aria-label="Fechar">
-              ×
-            </button>
+            <button type="button" className="modal-close" onClick={closeEditModal}>×</button>
             <h2>Editar ticket</h2>
             <form onSubmit={handleEditSubmit} className="modal-form">
-              <label htmlFor="edit-title">Título</label>
+              <label>Título</label>
               <input
-                id="edit-title"
                 type="text"
                 value={editingValues.title}
                 onChange={(event) => setEditingValues((state) => ({ ...state, title: event.target.value }))}
                 required
               />
-
-              <label htmlFor="edit-description">Descrição</label>
+              <label>Descrição</label>
               <textarea
-                id="edit-description"
                 rows={4}
                 value={editingValues.description}
                 onChange={(event) => setEditingValues((state) => ({ ...state, description: event.target.value }))}
-                placeholder="Descreva o contexto, checklist ou resultados esperados"
               />
-
               <div className="modal-actions">
-                <button type="button" className="ghost-button" onClick={closeEditModal}>
-                  Cancelar
-                </button>
-                <button type="submit" className="primary-button" disabled={isSavingEdit}>
-                  {isSavingEdit ? 'Salvando...' : 'Salvar mudanças'}
+                <button type="button" className="ghost-button" onClick={closeEditModal}>Cancelar</button>
+                <button type="submit" className="primary-button" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? 'Salvando...' : 'Salvar mudanças'}
                 </button>
               </div>
             </form>
