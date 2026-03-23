@@ -9,10 +9,10 @@ const projectsRepository = {
         return rows[0];
     },
 
-    async findAllByOwner(ownerId) {
+    async findAllByOwner(ownerId, limit = 20, offset = 0) {
         const { rows } = await pool.query(
-            'SELECT * FROM projects WHERE owner_id = $1 ORDER BY created_at DESC',
-            [ownerId]
+            'SELECT * FROM projects WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+            [ownerId, limit, offset]
         );
         return rows;
     },
@@ -26,8 +26,6 @@ const projectsRepository = {
     },
 
     async update(id, ownerId, updates, values) {
-        // updates é um array de strings tipo ["title = $1", "status = $2"]
-        // values contém os valores correspondentes, terminando com [id, ownerId]
         const { rows } = await pool.query(
             `UPDATE projects
        SET ${updates.join(', ')}
