@@ -37,6 +37,11 @@ const tasksRepository = {
             [taskId, userId]
         );
         return rowCount > 0;
+    },
+
+    async findById(taskId) {
+        const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+        return rows[0];
     }
 };
 

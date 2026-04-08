@@ -5,7 +5,7 @@ const { z } = require('zod');
 
 const taskSchema = z.object({
     description: z.string().min(1, 'Descrição é obrigatória').trim(),
-    status: z.enum(['todo', 'done']).default('todo'),
+    status: z.enum(['todo', 'in_progress', 'done']).default('todo'),
 });
 
 // DTO Mapper (Isolamento de Dados Sênior)
@@ -62,6 +62,14 @@ const tasksService = {
             throw new AppError('Tarefa não encontrada ou acesso negado', 404);
         }
         return true;
+    },
+
+    async listTasksByTaskId(taskId, userId) {
+        // Busca simples para obter metadados (como projectId)
+        // O repository de tarefas deve suportar findById
+        const task = await tasksRepository.findById(taskId);
+        if (!task) throw new AppError('Tarefa não encontrada', 404);
+        return mapToTaskDTO(task);
     }
 };
 

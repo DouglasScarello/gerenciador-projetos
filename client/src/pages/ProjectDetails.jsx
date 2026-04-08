@@ -18,8 +18,8 @@ export default function ProjectDetails() {
 
   async function load() {
     try {
-      const { data } = await api.get(`/tarefas/${id}`)
-      setTasks(data)
+      const { data } = await api.get(`/tarefas?projectId=${id}`)
+      setTasks(data.data || [])
     } catch (err) {
       if (err.response?.status === 401) navigate('/login')
     }
@@ -27,19 +27,19 @@ export default function ProjectDetails() {
 
   async function addTask(e) {
     e.preventDefault()
-    await api.post(`/tarefas/${id}`, { description })
+    await api.post('/tarefas', { project_id: id, description })
     setDescription('')
     load()
   }
 
   async function toggle(task) {
     const next = task.status === 'done' ? 'todo' : 'done'
-    await api.put(`/tarefas/${task._id}`, { status: next })
+    await api.put(`/tarefas/${task.id}`, { status: next })
     load()
   }
 
   async function remove(task) {
-    await api.delete(`/tarefas/${task._id}`)
+    await api.delete(`/tarefas/${task.id}`)
     load()
   }
 
@@ -60,7 +60,7 @@ export default function ProjectDetails() {
         </Card>
         <section className="space-y-3">
           {tasks.map((t) => (
-            <Card key={t._id} className="flex items-center justify-between rounded-2xl">
+            <Card key={t.id} className="flex items-center justify-between rounded-2xl">
               <span className={t.status === 'done' ? 'text-gray-500 line-through' : 'text-gray-800'}>{t.description}</span>
               <div className="flex items-center gap-2">
                 <Button onClick={() => toggle(t)} className="bg-gray-800 hover:bg-black">

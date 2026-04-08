@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { io } from 'socket.io-client'
 import api from '../services/api'
 import toast from 'react-hot-toast'
 import './ProjectDashboard.css'
@@ -13,63 +14,78 @@ const STAGES = [
 
 const stageOrder = STAGES.map((stage) => stage.key)
 
-function getTicketId(ticket) {
-  return ticket.id ?? ticket._id
-}
+// Removido getTicketId legado do MongoDB (Senior standardization)
 
 export default function ProjectDashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
+  const [selectedProjectId, setSelectedProjectId] = useState(null)
   const [formValues, setFormValues] = useState({ title: '', description: '' })
   const [editingTicket, setEditingTicket] = useState(null)
   const [editingValues, setEditingValues] = useState({ title: '', description: '' })
   const [draggingTicketId, setDraggingTicketId] = useState(null)
   const [activeDropStage, setActiveDropStage] = useState(null)
 
-  // Fetching tickets with React Query
-  const { data: response, isLoading, error: fetchError } = useQuery({
+  // 1. Buscar todos os projetos para o seletor
+  const { data: projectsResponse } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       const res = await api.get('/projetos')
-      return res.data // { success: true, data: [...] }
+      return res.data
     }
   })
 
-  const tickets = response?.data || []
+  const projects = projectsResponse?.data || []
+
+  // Auto-selecionar o primeiro projeto se nada estiver selecionado
+  useEffect(() => {
+    if (projects.length > 0 && !selectedProjectId) {
+      setSelectedProjectId(projects[0].id)
+    }
+  }, [projects, selectedProjectId])
+
+  // 2. Buscar TAREFAS do projeto selecionado (Alinhamento Arquitetural)
+  const { data: tasksResponse, isLoading, error: fetchError } = useQuery({
+    queryKey: ['tasks', selectedProjectId],
+    queryFn: async () => {
+      if (!selectedProjectId) return { data: [] }
+      const res = await api.get(`/tarefas?projectId=${selectedProjectId}`)
+      return res.data
+    },
+    enabled: !!selectedProjectId
+  })
+
+  const tickets = tasksResponse?.data || []
 
   // Mutations
   const createMutation = useMutation({
-    mutationFn: (newTicket) => api.post('/projetos', newTicket),
+    mutationFn: (newTask) => api.post('/tarefas', { ...newTask, project_id: selectedProjectId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      toast.success('Ticket criado com sucesso!')
+      // O cache será invalidado via socket se o backend emitir, 
+      // mas mantemos aqui para feedback instantâneo local
+      queryClient.invalidateQueries({ queryKey: ['tasks', selectedProjectId] })
+      toast.success('Tarefa criada com sucesso!')
       setFormValues({ title: '', description: '' })
     },
     onError: (err) => {
-      toast.error(err.response?.data?.error?.message || 'Erro ao criar ticket')
+      toast.error(err.response?.data?.error?.message || 'Erro ao criar tarefa')
     }
   })
 
   // ⚡ OPTIMISTIC UPDATE: Mover Ticket
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => api.put(`/projetos/${id}`, data),
+    mutationFn: ({ id, data }) => api.put(`/tarefas/${id}`, data),
     onMutate: async ({ id, data }) => {
-      // Cancelar refetches em andamento
-      await queryClient.cancelQueries({ queryKey: ['projects'] })
+      await queryClient.cancelQueries({ queryKey: ['tasks', selectedProjectId] })
+      const previousData = queryClient.getQueryData(['tasks', selectedProjectId])
 
-      // Salvar estado anterior para rollback
-      const previousData = queryClient.getQueryData(['projects'])
-
-      // Aplicar update otimista no cache
-      queryClient.setQueryData(['projects'], (old) => {
+      queryClient.setQueryData(['tasks', selectedProjectId], (old) => {
         if (!old) return old
         return {
           ...old,
           data: old.data.map((ticket) =>
-            String(getTicketId(ticket)) === String(id)
-              ? { ...ticket, ...data }
-              : ticket
+            String(ticket.id) === String(id) ? { ...ticket, ...data } : ticket
           )
         }
       })
@@ -77,46 +93,44 @@ export default function ProjectDashboard() {
       return { previousData }
     },
     onError: (err, variables, context) => {
-      // Rollback se falhar
       if (context?.previousData) {
-        queryClient.setQueryData(['projects'], context.previousData)
+        queryClient.setQueryData(['tasks', selectedProjectId], context.previousData)
       }
       toast.error(err.response?.data?.error?.message || 'Erro ao atualizar')
     },
     onSettled: () => {
-      // Sincronizar com o servidor no final
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks', selectedProjectId] })
     }
   })
 
   // ⚡ OPTIMISTIC UPDATE: Deletar Ticket
   const deleteMutation = useMutation({
-    mutationFn: (id) => api.delete(`/projetos/${id}`),
+    mutationFn: (id) => api.delete(`/tarefas/${id}`),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['projects'] })
-      const previousData = queryClient.getQueryData(['projects'])
+      await queryClient.cancelQueries({ queryKey: ['tasks', selectedProjectId] })
+      const previousData = queryClient.getQueryData(['tasks', selectedProjectId])
 
-      queryClient.setQueryData(['projects'], (old) => {
+      queryClient.setQueryData(['tasks', selectedProjectId], (old) => {
         if (!old) return old
         return {
           ...old,
-          data: old.data.filter((ticket) => String(getTicketId(ticket)) !== String(id))
+          data: old.data.filter((ticket) => String(ticket.id) !== String(id))
         }
       })
 
       return { previousData }
     },
     onSuccess: () => {
-      toast.success('Ticket removido')
+      toast.success('Tarefa removida')
     },
     onError: (err, id, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(['projects'], context.previousData)
+        queryClient.setQueryData(['tasks', selectedProjectId], context.previousData)
       }
       toast.error(err.response?.data?.error?.message || 'Erro ao remover')
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks', selectedProjectId] })
     }
   })
 
@@ -126,6 +140,30 @@ export default function ProjectDashboard() {
       document.body.style.backgroundColor = ''
     }
   }, [])
+
+  // ⚡ SINCRONIZAÇÃO EM TEMPO REAL (Sênior)
+  useEffect(() => {
+    if (!selectedProjectId) return
+
+    // Conectar ao servidor de WebSockets
+    const socket = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000', {
+      withCredentials: true
+    })
+
+    // Entrar na "sala" do projeto atual
+    socket.emit('join-project', selectedProjectId)
+
+    // Listeners para invalidar cache
+    const invalidate = () => queryClient.invalidateQueries({ queryKey: ['tasks', selectedProjectId] })
+
+    socket.on('task:created', invalidate)
+    socket.on('task:updated', invalidate)
+    socket.on('task:deleted', invalidate)
+
+    return () => {
+      socket.disconnect()
+    }
+  }, [selectedProjectId, queryClient])
 
   const groupedTickets = useMemo(() => {
     return STAGES.reduce((acc, stage) => {
@@ -150,7 +188,7 @@ export default function ProjectDashboard() {
   }
 
   async function handleDeleteTicket(ticket) {
-    const ticketId = getTicketId(ticket)
+    const ticketId = ticket.id
     if (!ticketId) return
     if (window.confirm('Tem certeza que deseja excluir este ticket?')) {
       deleteMutation.mutate(ticketId)
@@ -158,7 +196,7 @@ export default function ProjectDashboard() {
   }
 
   async function handleMoveTicket(ticket, direction) {
-    const ticketId = getTicketId(ticket)
+    const ticketId = ticket.id
     if (!ticketId) return
 
     const currentIndex = stageOrder.indexOf(ticket.status || 'todo')
@@ -169,7 +207,7 @@ export default function ProjectDashboard() {
   }
 
   function handleDragStart(event, ticket) {
-    const ticketId = getTicketId(ticket)
+    const ticketId = ticket.id
     if (!ticketId) return
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', String(ticketId))
@@ -200,7 +238,7 @@ export default function ProjectDashboard() {
     setActiveDropStage(null)
     if (!ticketId) return
 
-    const ticket = tickets.find((item) => String(getTicketId(item)) === ticketId)
+    const ticket = tickets.find((item) => String(item.id) === ticketId)
     if (!ticket || (ticket.status || 'todo') === stageKey) return
 
     updateMutation.mutate({ id: ticketId, data: { status: stageKey } })
@@ -222,7 +260,7 @@ export default function ProjectDashboard() {
   async function handleEditSubmit(event) {
     event.preventDefault()
     if (!editingTicket) return
-    const ticketId = getTicketId(editingTicket)
+    const ticketId = editingTicket.id
     if (!ticketId) return
 
     updateMutation.mutate({
@@ -254,6 +292,21 @@ export default function ProjectDashboard() {
             <h1>Central de tickets</h1>
             <p>Organize suas tarefas pessoais por estágio e acompanhe o progresso.</p>
           </div>
+
+          <div className="project-selector-wrapper">
+            <label htmlFor="project-select">Projeto Atual:</label>
+            <select
+              id="project-select"
+              value={selectedProjectId || ''}
+              onChange={(e) => setSelectedProjectId(Number(e.target.value))}
+              className="project-select"
+            >
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.title}</option>
+              ))}
+            </select>
+          </div>
+
           <button type="button" className="logout-button" onClick={logout}>
             Sair
           </button>
@@ -316,7 +369,7 @@ export default function ProjectDashboard() {
                 )}
 
                 {groupedTickets[stage.key]?.map((ticket) => {
-                  const ticketId = getTicketId(ticket)
+                  const ticketId = ticket.id
                   const canMoveBackward = stageOrder.indexOf(stage.key) > 0
                   const canMoveForward = stageOrder.indexOf(stage.key) < stageOrder.length - 1
 
