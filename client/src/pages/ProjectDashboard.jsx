@@ -382,29 +382,46 @@ export default function ProjectDashboard() {
                       key={ticketId}
                       className={`ticket-card ticket-card--${stage.key}${String(ticketId) === draggingTicketId ? ' is-dragging' : ''}${isDeleting ? ' is-deleting' : ''}`}
                       draggable
+                      role="listitem"
+                      aria-grabbed={String(ticketId) === draggingTicketId}
+                      tabIndex={0}
                       onDragStart={(event) => handleDragStart(event, ticket)}
                       onDragEnd={handleDragEnd}
                     >
                       <h3>{ticket.title}</h3>
                       {ticket.description && <p>{ticket.description}</p>}
-                      <div className="ticket-card__actions">
+                      <div className="ticket-card__actions" role="toolbar" aria-label="Ações do ticket">
                         <button
                           type="button"
                           className="ghost-button"
+                          aria-label={`Mover ${ticket.title} para trás`}
                           onClick={() => handleMoveTicket(ticket, -1)}
                           disabled={!canMoveBackward || isUpdating || isDeleting}
                         >
                           {isUpdating ? '...' : '←'}
                         </button>
-                        <button type="button" className="ghost-button" onClick={() => openEditModal(ticket)} disabled={isUpdating || isDeleting}>
+                        <button 
+                          type="button" 
+                          className="ghost-button" 
+                          aria-label={`Editar ${ticket.title}`}
+                          onClick={() => openEditModal(ticket)} 
+                          disabled={isUpdating || isDeleting}
+                        >
                           Detalhes
                         </button>
-                        <button type="button" className="danger-button" onClick={() => handleDeleteTicket(ticket)} disabled={isDeleting || isUpdating}>
+                        <button 
+                          type="button" 
+                          className="danger-button" 
+                          aria-label={`Excluir ${ticket.title}`}
+                          onClick={() => handleDeleteTicket(ticket)} 
+                          disabled={isDeleting || isUpdating}
+                        >
                           {isDeleting ? 'Excluindo...' : 'Excluir'}
                         </button>
                         <button
                           type="button"
                           className="ghost-button"
+                          aria-label={`Mover ${ticket.title} para frente`}
                           onClick={() => handleMoveTicket(ticket, 1)}
                           disabled={!canMoveForward || isUpdating || isDeleting}
                         >

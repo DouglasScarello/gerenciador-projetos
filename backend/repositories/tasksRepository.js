@@ -1,11 +1,13 @@
 const { pool } = require('../db');
 
 const tasksRepository = {
-    async create(description, status, projectId, dbClient = null) {
+    async create(title, description, status, projectId, dbClient = null) {
         const client = dbClient || pool;
+        const taskTitle = title || description || 'Sem título';
+        const taskDesc = description !== undefined ? description : null;
         const { rows } = await client.query(
-            'INSERT INTO tasks(description, status, project_id) VALUES($1, $2, $3) RETURNING *',
-            [description, status || 'todo', projectId]
+            'INSERT INTO tasks(title, description, status, project_id) VALUES($1, $2, $3, $4) RETURNING *',
+            [taskTitle, taskDesc, status || 'todo', projectId]
         );
         return rows[0];
     },
@@ -18,15 +20,16 @@ const tasksRepository = {
         return rows;
     },
 
-    async update(taskId, description, status, userId) {
+    async update(taskId, title, description, status, userId) {
         const { rows } = await pool.query(
             `UPDATE tasks t
-       SET description = COALESCE($1, t.description),
-           status = COALESCE($2, t.status)
+       SET title = COALESCE($1, t.title),
+           description = COALESCE($2, t.description),
+           status = COALESCE($3, t.status)
        FROM projects p
-       WHERE t.id = $3 AND t.project_id = p.id AND p.owner_id = $4
+       WHERE t.id = $4 AND t.project_id = p.id AND p.owner_id = $5
        RETURNING t.*`,
-            [description, status, taskId, userId]
+            [title, description, status, taskId, userId]
         );
         return rows[0];
     },

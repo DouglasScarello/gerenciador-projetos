@@ -4,13 +4,15 @@ const AppError = require('../utils/AppError');
 const { z } = require('zod');
 
 const taskSchema = z.object({
-    description: z.string().min(1, 'Descrição é obrigatória').trim(),
+    title: z.string().min(1, 'Título é obrigatório').trim().optional(),
+    description: z.string().optional().nullable().transform(val => val?.trim() || null),
     status: z.enum(['todo', 'in_progress', 'done']).default('todo'),
 });
 
 // DTO Mapper (Isolamento de Dados Sênior)
 const mapToTaskDTO = (task) => ({
     id: task.id,
+    title: task.title || task.description || 'Sem título',
     description: task.description,
     status: task.status,
     projectId: task.project_id,
@@ -19,7 +21,10 @@ const mapToTaskDTO = (task) => ({
 
 const tasksService = {
     async createTask(projectId, data, userId) {
-        const validated = taskSchema.parse(data);
+        // Se vier title mas não description, ou vice-versa, garantir consistência
+        const title = data.title?.trim() || data.description?.trim() || 'Sem título';
+        const description = data.description?.trim() || null;
+        const status = data.status || 'todo';
 
         // 🛡️ Domain Ownership: Validar antes de agir
         const project = await projectsRepository.findByIdAndOwner(projectId, userId);
@@ -27,7 +32,7 @@ const tasksService = {
             throw new AppError('Projeto não encontrado ou acesso negado', 404);
         }
 
-        const task = await tasksRepository.create(validated.description, validated.status, projectId);
+        const task = await tasksRepository.create(title, description, status, projectId);
         return mapToTaskDTO(task);
     },
 
@@ -43,13 +48,11 @@ const tasksService = {
     },
 
     async updateTask(taskId, data, userId) {
-        const updateSchema = taskSchema.partial();
-        const validated = updateSchema.parse(data);
+        const title = data.title !== undefined ? data.title.trim() : null;
+        const description = data.description !== undefined ? data.description : null;
+        const status = data.status || null;
 
-        // O repository já faz o check via JOIN, mas no nível Sênior 
-        // poderíamos buscar a tarefa primeiro para garantir a existência.
-        // Vamos manter o JOIN mas retornar o DTO.
-        const updated = await tasksRepository.update(taskId, validated.description, validated.status, userId);
+        const updated = await tasksRepository.update(taskId, title, description, status, userId);
         if (!updated) {
             throw new AppError('Tarefa não encontrada ou acesso negado', 404);
         }

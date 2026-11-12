@@ -18,11 +18,13 @@ ALTER TABLE projects
 ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'todo';
 CREATE TABLE IF NOT EXISTS tasks (
   id SERIAL PRIMARY KEY,
-  description TEXT NOT NULL,
+  title VARCHAR(255) NOT NULL DEFAULT 'Sem título',
+  description TEXT,
   status VARCHAR(20) NOT NULL DEFAULT 'todo',
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title VARCHAR(255) NOT NULL DEFAULT 'Sem título';
 -- Índices de Performance (Sênior Optimization)
 CREATE INDEX IF NOT EXISTS idx_projects_owner_id ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);

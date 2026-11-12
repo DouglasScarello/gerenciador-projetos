@@ -37,6 +37,7 @@ const projectsService = {
 
             // 2. Criar tarefa inicial automática (Atomicidade Sênior)
             await tasksRepository.create(
+                'Boas-vindas!',
                 'Bem-vindo ao seu novo projeto! Comece editando esta tarefa.',
                 'todo',
                 project.id,
