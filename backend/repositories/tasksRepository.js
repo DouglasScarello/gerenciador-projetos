@@ -1,13 +1,13 @@
 const { pool } = require('../db');
 
 const tasksRepository = {
-    async create(title, description, status, projectId, dbClient = null) {
+    async create(title, description, status, projectId, priority = 'none', label = 'feature', dueDate = null, dbClient = null) {
         const client = dbClient || pool;
         const taskTitle = title || description || 'Sem título';
         const taskDesc = description !== undefined ? description : null;
         const { rows } = await client.query(
-            'INSERT INTO tasks(title, description, status, project_id) VALUES($1, $2, $3, $4) RETURNING *',
-            [taskTitle, taskDesc, status || 'todo', projectId]
+            'INSERT INTO tasks(title, description, status, priority, label, due_date, project_id) VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+            [taskTitle, taskDesc, status || 'todo', priority || 'none', label || 'feature', dueDate || null, projectId]
         );
         return rows[0];
     },
@@ -20,16 +20,19 @@ const tasksRepository = {
         return rows;
     },
 
-    async update(taskId, title, description, status, userId) {
+    async update(taskId, title, description, status, priority, label, dueDate, userId) {
         const { rows } = await pool.query(
             `UPDATE tasks t
        SET title = COALESCE($1, t.title),
            description = COALESCE($2, t.description),
-           status = COALESCE($3, t.status)
+           status = COALESCE($3, t.status),
+           priority = COALESCE($4, t.priority),
+           label = COALESCE($5, t.label),
+           due_date = COALESCE($6, t.due_date)
        FROM projects p
-       WHERE t.id = $4 AND t.project_id = p.id AND p.owner_id = $5
+       WHERE t.id = $7 AND t.project_id = p.id AND p.owner_id = $8
        RETURNING t.*`,
-            [title, description, status, taskId, userId]
+            [title, description, status, priority, label, dueDate, taskId, userId]
         );
         return rows[0];
     },

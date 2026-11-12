@@ -7,6 +7,9 @@ const taskSchema = z.object({
     title: z.string().min(1, 'Título é obrigatório').trim().optional(),
     description: z.string().optional().nullable().transform(val => val?.trim() || null),
     status: z.enum(['todo', 'in_progress', 'done']).default('todo'),
+    priority: z.enum(['urgent', 'high', 'medium', 'low', 'none']).default('none'),
+    label: z.string().optional().default('feature'),
+    dueDate: z.string().optional().nullable(),
 });
 
 // DTO Mapper (Isolamento de Dados Sênior)
@@ -15,6 +18,9 @@ const mapToTaskDTO = (task) => ({
     title: task.title || task.description || 'Sem título',
     description: task.description,
     status: task.status,
+    priority: task.priority || 'none',
+    label: task.label || 'feature',
+    dueDate: task.due_date ? task.due_date.toISOString().split('T')[0] : null,
     projectId: task.project_id,
     createdAt: task.created_at
 });
@@ -25,6 +31,9 @@ const tasksService = {
         const title = data.title?.trim() || data.description?.trim() || 'Sem título';
         const description = data.description?.trim() || null;
         const status = data.status || 'todo';
+        const priority = data.priority || 'none';
+        const label = data.label || 'feature';
+        const dueDate = data.dueDate || null;
 
         // 🛡️ Domain Ownership: Validar antes de agir
         const project = await projectsRepository.findByIdAndOwner(projectId, userId);
@@ -32,7 +41,7 @@ const tasksService = {
             throw new AppError('Projeto não encontrado ou acesso negado', 404);
         }
 
-        const task = await tasksRepository.create(title, description, status, projectId);
+        const task = await tasksRepository.create(title, description, status, projectId, priority, label, dueDate);
         return mapToTaskDTO(task);
     },
 
@@ -51,8 +60,11 @@ const tasksService = {
         const title = data.title !== undefined ? data.title.trim() : null;
         const description = data.description !== undefined ? data.description : null;
         const status = data.status || null;
+        const priority = data.priority || null;
+        const label = data.label || null;
+        const dueDate = data.dueDate !== undefined ? data.dueDate : null;
 
-        const updated = await tasksRepository.update(taskId, title, description, status, userId);
+        const updated = await tasksRepository.update(taskId, title, description, status, priority, label, dueDate, userId);
         if (!updated) {
             throw new AppError('Tarefa não encontrada ou acesso negado', 404);
         }

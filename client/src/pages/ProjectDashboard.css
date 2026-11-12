@@ -434,3 +434,244 @@ body {
   gap: 10px;
   background-color: rgba(0, 0, 0, 0.15);
 }
+
+/* ==============================
+   TOPBAR FILTERS - Linear Style
+   ============================== */
+.topbar-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  margin: 0 16px;
+}
+
+/* Barra de Busca */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0 10px;
+  gap: 7px;
+  height: 30px;
+  min-width: 180px;
+  transition: border-color 0.15s ease;
+}
+
+.search-box:focus-within {
+  border-color: var(--border-active);
+}
+
+.search-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  color: var(--text-primary);
+  width: 100%;
+  min-width: 100px;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-clear {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.search-clear:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+}
+
+/* Filtros Select */
+.filter-select-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0 10px;
+  height: 30px;
+  transition: border-color 0.15s ease;
+}
+
+.filter-select-wrapper:hover {
+  border-color: var(--border-active);
+}
+
+.filter-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.filter-select {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.filter-select option {
+  background-color: #1a1d24;
+  color: var(--text-primary);
+}
+
+.btn-clear-filters {
+  background-color: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 6px;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-clear-filters:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+}
+
+/* Atalho de teclado (kbd) */
+.linear-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.4;
+  margin-left: 2px;
+}
+
+/* ==============================
+   CARD META: Prioridade, Label, Prazo
+   ============================== */
+.card-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 20px;
+}
+
+.card-meta-badges {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+/* Badge de Prioridade */
+.priority-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* Badge de Etiqueta */
+.label-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 1px 7px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+/* Badge de Prazo */
+.due-date-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.due-date-pill.overdue {
+  color: #f87171;
+}
+
+/* ==============================
+   MODAL: Grid de campos (Prioridade/Etiqueta/Prazo)
+   ============================== */
+.modal-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.modal-field-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Select estilo Linear para modais */
+.linear-select {
+  width: 100%;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.linear-select:focus {
+  border-color: var(--accent-purple);
+}
+
+.linear-select option {
+  background-color: #1a1d24;
+  color: var(--text-primary);
+}
+
+/* Input date dark style */
+input[type="date"].linear-input {
+  color-scheme: dark;
+}

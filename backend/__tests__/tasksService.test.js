@@ -33,13 +33,18 @@ describe('tasksService', () => {
             'Implementar Auth',
             'Usar JWT em cookies',
             'todo',
-            1
+            1,
+            'none',
+            'feature',
+            null
         );
         expect(result).toMatchObject({
             id: 101,
             title: 'Implementar Auth',
             description: 'Usar JWT em cookies',
             status: 'todo',
+            priority: 'none',
+            label: 'feature',
             projectId: 1
         });
     });
@@ -60,13 +65,15 @@ describe('tasksService', () => {
             title: 'Implementar Auth',
             description: 'Concluido',
             status: 'done',
+            priority: 'high',
+            label: 'bug',
             project_id: 1,
             created_at: new Date().toISOString()
         });
 
         const result = await tasksService.updateTask(101, { status: 'done' }, 10);
 
-        expect(tasksRepository.update).toHaveBeenCalledWith(101, null, null, 'done', 10);
+        expect(tasksRepository.update).toHaveBeenCalledWith(101, null, null, 'done', null, null, null, 10);
         expect(result.status).toBe('done');
     });
 

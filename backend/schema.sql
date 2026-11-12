@@ -21,10 +21,17 @@ CREATE TABLE IF NOT EXISTS tasks (
   title VARCHAR(255) NOT NULL DEFAULT 'Sem título',
   description TEXT,
   status VARCHAR(20) NOT NULL DEFAULT 'todo',
+  priority VARCHAR(20) NOT NULL DEFAULT 'none',
+  label VARCHAR(50) DEFAULT 'feature',
+  due_date DATE,
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title VARCHAR(255) NOT NULL DEFAULT 'Sem título';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority VARCHAR(20) NOT NULL DEFAULT 'none';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS label VARCHAR(50) DEFAULT 'feature';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date DATE;
 -- Índices de Performance (Sênior Optimization)
 CREATE INDEX IF NOT EXISTS idx_projects_owner_id ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
