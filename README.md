@@ -1,120 +1,142 @@
-# 🚀 Gerenciador de Projetos - Kanban SaaS Ready
+# 📋 Gerenciador de Projetos (Kanban Full-Stack)
 
-Uma aplicação **Full-Stack Enterprise-Level** para gerenciamento de projetos e tarefas, desenvolvida com foco em **Segurança Sênior**, **Performance Reativa** e **Arquitetura Escalável**.
-
----
-
-## 🛡️ Destaques de Segurança (Senior Level)
-
-Diferente de aplicações comuns de estudo, este projeto implementa padrões de segurança exigidos pelo mercado:
-
-- **Autenticação via httpOnly Cookies**: O token JWT é armazenado em cookies seguros, protegendo a aplicação contra ataques de **XSS (Cross-Site Scripting)**.
-- **Proteção CSRF**: Uso de flags `SameSite: Strict` para mitigar ataques de falsificação de requisição.
-- **Validação Robusta no Backend**: Sanitização e validação de dados (como emails) via `validator.js` antes de qualquer persistência.
-- **Segurança JWT**: Configuração estritamente baseada em variáveis de ambiente, sem fallbacks inseguros.
-- **Isolamento de Dados (Multi-tenant)**: Todas as queries SQL garantem que um usuário só acesse seus próprios projetos e tarefas (`owner_id` enforcement).
+Aplicação web full-stack para gerenciamento de projetos e tarefas em quadro Kanban com suporte a movimentação drag-and-drop, sincronização em tempo real e isolamento de dados por usuário.
 
 ---
 
-## ⚡ Performance & UX
-
-- **Estado Local Otimizado**: O Dashboard (Kanban) utiliza atualizações de estado local no React para refletir ações (criar, mover, excluir) instantaneamente, reduzindo drasticamente a latência e o número de requisições ao servidor.
-- **Roteamento Preventivo**: Componente `ProtectedRoute` que valida a sessão com o backend (`/me`) antes de renderizar páginas privadas, evitando vazamento de UI.
-- **Design Moderno**: Interface limpa construída com TailwindCSS, focada em produtividade.
-
----
-
-## 🛠️ Tech Stack
+## 🛠️ Tecnologias Utilizadas
 
 ### Backend
-- **Core**: Node.js & Express.js
-- **Banco de Dados**: PostgreSQL
-- **Segurança**: JSON Web Tokens (JWT), bcrypt, cookie-parser, validator
-- **Tooling**: Nodemon, dotenv
+* **Linguagem & Framework:** Node.js (v20+) e Express.js
+* **Banco de Dados:** PostgreSQL (driver `pg` com pool de conexões)
+* **Tempo Real & Mensageria:** Socket.IO integrado ao Redis (`@socket.io/redis-adapter`)
+* **Controle de Taxa:** Express Rate Limit com armazenamento no Redis (`rate-limit-redis`)
+* **Segurança & Validação:** JWT via cookies `httpOnly`, bcrypt para hash de senhas, Zod e validator.js
+* **Testes Automatizados:** Jest (testes de regras de negócio, atomicidade e isolamento multi-tenant)
 
 ### Frontend
-- **Framework**: React 18 (Vite)
-- **Estilização**: TailwindCSS
-- **Formulários**: React Hook Form & Zod
-- **Comunicação**: Axios (Configurado para credenciais/cookies)
+* **Core:** React 18 com Vite
+* **Gerenciamento de Estado de Servidor:** TanStack Query (React Query) com atualizações otimistas (*optimistic updates*)
+* **Tempo Real:** Socket.IO Client (conexão vinculada à sala do projeto selecionado)
+* **Estilização:** Tailwind CSS e CSS modularizado
+* **Notificações:** React Hot Toast
+* **Comunicação HTTP:** Axios com `withCredentials: true` para tráfego seguro de cookies de sessão
+
+### Infraestrutura
+* **Docker Compose:** Orquestração local dos serviços de PostgreSQL, Redis, Backend e Frontend
 
 ---
 
-## 🏗️ Arquitetura
+## 🏛️ Arquitetura e Decisões de Implementação
 
-```mermaid
-graph TD
-    User((Usuário))
-    Client[React Frontend - Vite]
-    Server[Express Backend]
-    DB[(PostgreSQL)]
+1. **Separação em Camadas (Backend):**
+   * `routes/`: Roteamento HTTP, extração de parâmetros e delegação.
+   * `services/`: Regras de negócio, validação de schemas com Zod e DTO mapping.
+   * `repositories/`: Camada de persistência responsável por consultas SQL parametrizadas.
 
-    User -->|Interage| Client
-    Client -->|API Requests with Credentials| Server
-    Server -->|Valida Session/Cookie| Server
-    Server -->|SQL Queries com owner_id| DB
-    DB -->|Data| Server
-    Server -->|JSON Response| Client
-```
+2. **Isolamento de Dados (Multi-tenancy):**
+   * Toda consulta, atualização e deleção de projetos e tarefas valida se `p.owner_id = req.userId`. Um usuário autenticado não possui permissão para ler ou alterar dados de outros usuários.
+
+3. **Atomicidade em Criação:**
+   * A criação de um novo projeto utiliza transações manuais com o cliente do PostgreSQL (`BEGIN`, `COMMIT`, `ROLLBACK`), garantindo que o projeto e sua tarefa inicial de boas-vindas sejam persistidos juntos ou cancelados em caso de falha.
+
+4. **Sincronização em Tempo Real:**
+   * Ao selecionar um projeto, o cliente se conecta a uma sala específica (`project_${id}`) no Socket.IO.
+   * Operações de criação, edição e exclusão de tarefas emitem eventos para a sala correspondente, disparando a invalidação de cache no TanStack Query dos clientes conectados.
+
+5. **Migrações de Banco de Dados:**
+   * O projeto conta com um executor próprio de migrações (`backend/migrations/runner.js`) que registra os scripts já executados na tabela `_migrations`, evitando inconsistências manuais de schema.
 
 ---
 
-## ⚙️ Configuração do Ambiente
+## ⚙️ Como Executar o Projeto
 
-### 1. Banco de Dados e Migrações Automáticas
-O projeto conta com um **Migration Runner** automático (`backend/migrations/runner.js`) que controla versões aplicadas através da tabela `_migrations`:
+### Opção 1: Via Docker Compose (Recomendado)
+
+Suba toda a infraestrutura (PostgreSQL, Redis, API e Client) com um único comando:
+
 ```bash
-createdb gerenciador_projetos_sql
+docker-compose up --build
 ```
 
-### 2. Backend
+* **Frontend:** [http://localhost:80](http://localhost:80)
+* **Backend:** [http://localhost:5000](http://localhost:5000)
+
+---
+
+### Opção 2: Execução Local Passo a Passo
+
+#### Pré-requisitos
+* Node.js 18+ instalado
+* PostgreSQL e Redis em execução localmente
+
+#### 1. Configurar o Backend
 ```bash
 cd backend
 npm install
-npm run migrate  # Executa o schema base e todas as migrations versionadas
 ```
-Crie um arquivo `.env`:
+
+Crie o arquivo `backend/.env`:
 ```env
 PORT=5000
-JWT_SECRET=sua_chave_secreta_longa_e_segura
+NODE_ENV=development
+JWT_SECRET=defina_uma_chave_secreta_segura
 DB_HOST=localhost
 DB_PORT=5432
-DB_USER=seu_usuario
-DB_PASSWORD=sua_senha
+DB_USER=seu_usuario_postgres
+DB_PASSWORD=sua_senha_postgres
 DB_NAME=gerenciador_projetos_sql
+REDIS_URL=redis://localhost:6379
 CLIENT_ORIGIN=http://localhost:5173
 ```
-* Executar testes unitários e de integração: `npm test`
-* Iniciar servidor em desenvolvimento: `npm run dev`
 
-### 3. Frontend
+Execute as migrações para criar as tabelas e índices:
+```bash
+npm run migrate
+```
+
+Inicie o servidor backend:
+```bash
+npm run dev
+```
+
+#### 2. Configurar o Frontend
+Em outro terminal:
 ```bash
 cd client
 npm install
 npm run dev
 ```
 
----
-
-## 🎯 Funcionalidades Atuais
-
-- **Quadro Kanban**: 3 estágios (Para fazer, Em andamento, Concluído).
-- **Drag & Drop**: Movimentação fluida de tickets.
-- **Gestão de Tarefas**: Checklists dentro de cada projeto.
-- **Sessão Persistente**: Login seguro que se mantém após o refresh da página.
-- **Logout Seguro**: Limpeza completa de cookies no lado do servidor e cliente.
+Acesse a interface no navegador em [http://localhost:5173](http://localhost:5173).
 
 ---
 
-## 🚀 Próximos Passos (SaaS Roadmap)
+## 🧪 Testes Automatizados
 
-- [ ] Implementação de Planos (Free vs Premium).
-- [ ] Sistema de Billing (Stripe Integration).
-- [ ] Dashboards de métricas por projeto.
-- [ ] Notificações em tempo real.
+O backend conta com testes cobrindo tratamento operacional de erros, serviços de domínio e isolamento de dados com mocks:
+
+```bash
+cd backend
+npm test
+```
+
+---
+
+## 🎯 Funcionalidades Implementadas
+
+* [x] Cadastro e autenticação de usuários com senha criptografada (bcrypt).
+* [x] Sessão segura via cookies `httpOnly` com proteção `SameSite`.
+* [x] CRUD completo de projetos com criação atômica da primeira tarefa.
+* [x] Quadro Kanban com 3 colunas (*Para fazer*, *Em andamento*, *Concluído*).
+* [x] Movimentação de tarefas via Drag-and-Drop ou botões direcionais acessíveis via teclado.
+* [x] Atualizações otimistas no frontend (o card move instantaneamente e reverte em caso de erro na API).
+* [x] Atualização em tempo real via WebSockets entre múltiplas abas ou navegadores abertos no mesmo projeto.
+* [x] Rota de proteção no cliente (`ProtectedRoute`) validando o token no endpoint `/api/auth/me`.
 
 ---
 
 ## 📄 Licença
 
-Este projeto está sob a licença ISC. Desenvolvido por [Douglas Scarello](https://github.com/DouglasScarello).
+Este projeto é disponibilizado sob a licença **ISC**.  
+Desenvolvido por **[Douglas Scarello](https://github.com/DouglasScarello)**.
