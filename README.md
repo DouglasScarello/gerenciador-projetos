@@ -61,17 +61,17 @@ graph TD
 
 ## ⚙️ Configuração do Ambiente
 
-### 1. Banco de Dados
-Certifique-se de ter o PostgreSQL rodando e crie o banco:
+### 1. Banco de Dados e Migrações Automáticas
+O projeto conta com um **Migration Runner** automático (`backend/migrations/runner.js`) que controla versões aplicadas através da tabela `_migrations`:
 ```bash
 createdb gerenciador_projetos_sql
-psql -d gerenciador_projetos_sql -f backend/schema.sql
 ```
 
 ### 2. Backend
 ```bash
 cd backend
 npm install
+npm run migrate  # Executa o schema base e todas as migrations versionadas
 ```
 Crie um arquivo `.env`:
 ```env
@@ -84,7 +84,8 @@ DB_PASSWORD=sua_senha
 DB_NAME=gerenciador_projetos_sql
 CLIENT_ORIGIN=http://localhost:5173
 ```
-Execute: `npm start` (ou `npm run dev`)
+* Executar testes unitários e de integração: `npm test`
+* Iniciar servidor em desenvolvimento: `npm run dev`
 
 ### 3. Frontend
 ```bash

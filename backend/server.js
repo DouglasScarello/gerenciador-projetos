@@ -64,11 +64,20 @@ const errorMiddleware = require('./middleware/errorMiddleware');
 app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 5000;
+const { runMigrations } = require('./migrations/runner');
 
 pool.connect()
-  .then((client) => {
+  .then(async (client) => {
     client.release();
     console.log('PostgreSQL conectado');
+    
+    // Executar migrações pendentes automaticamente no startup
+    try {
+      await runMigrations();
+    } catch (migErr) {
+      console.warn('Aviso: Migrações não puderam ser concluídas:', migErr.message);
+    }
+
     httpServer.listen(PORT, () => {
       console.log(`Servidor rodando na porta ${PORT} (com WebSockets)`);
     });
