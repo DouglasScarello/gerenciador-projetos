@@ -38,11 +38,15 @@ router.post('/register', catchAsync(async (req, res) => {
 router.post('/login', loginLimiter, catchAsync(async (req, res) => {
   const { email, password } = req.body;
 
-  if (!email || !validator.isEmail(email)) {
-    throw new AppError('Email inválido', 400);
+  if (!email || typeof email !== 'string' || !email.trim()) {
+    throw new AppError('Informe o email ou usuário', 400);
   }
 
-  const { rows } = await pool.query('SELECT id, name, email, password_hash FROM users WHERE email = $1', [email]);
+  const identifier = email.trim();
+  const { rows } = await pool.query(
+    'SELECT id, name, email, password_hash FROM users WHERE email = $1 OR name ILIKE $1',
+    [identifier]
+  );
   const user = rows[0];
 
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {

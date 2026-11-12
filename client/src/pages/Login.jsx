@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 import './Login.css'
 
 const schema = z.object({
-  email: z.string().email('Email inválido'),
+  email: z.string().min(1, 'Informe seu usuário ou email'),
   password: z.string().min(6, 'Mínimo de 6 caracteres'),
 })
 
@@ -38,12 +38,12 @@ export default function Login() {
           </svg>
         </div>
         <h2 className="login-title">Acesse sua conta</h2>
-        <p className="login-subtitle">Use seu email e senha para continuar</p>
+        <p className="login-subtitle">Use seu usuário ou email e senha para continuar</p>
 
         <form onSubmit={handleSubmit(onSubmit)}>
           <input
-            type="email"
-            placeholder="Email"
+            type="text"
+            placeholder="Usuário ou Email"
             className="login-input"
             {...register('email')}
           />
