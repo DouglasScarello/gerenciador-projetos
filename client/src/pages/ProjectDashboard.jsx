@@ -27,6 +27,9 @@ export default function ProjectDashboard() {
   const [draggingTicketId, setDraggingTicketId] = useState(null)
   const [activeDropStage, setActiveDropStage] = useState(null)
 
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false)
+  const [newProjectValues, setNewProjectValues] = useState({ title: '', description: '' })
+
   // 1. Buscar todos os projetos para o seletor
   const { data: projectsResponse } = useQuery({
     queryKey: ['projects'],
@@ -45,6 +48,36 @@ export default function ProjectDashboard() {
     }
   }, [projects, selectedProjectId])
 
+  // Mutation para criar Projeto
+  const createProjectMutation = useMutation({
+    mutationFn: (newProj) => api.post('/projetos', newProj),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      toast.success('Projeto criado com sucesso!')
+      setIsNewProjectModalOpen(false)
+      setNewProjectValues({ title: '', description: '' })
+      if (res.data?.data?.id) {
+        setSelectedProjectId(res.data.data.id)
+      }
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.error?.message || 'Erro ao criar projeto')
+    }
+  })
+
+  // Mutation para excluir Projeto
+  const deleteProjectMutation = useMutation({
+    mutationFn: (projId) => api.delete(`/projetos/${projId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      toast.success('Projeto excluído com sucesso!')
+      setSelectedProjectId(null)
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.error?.message || 'Erro ao excluir projeto')
+    }
+  })
+
   // 2. Buscar TAREFAS do projeto selecionado (Alinhamento Arquitetural)
   const { data: tasksResponse, isLoading, error: fetchError } = useQuery({
     queryKey: ['tasks', selectedProjectId],
@@ -62,8 +95,6 @@ export default function ProjectDashboard() {
   const createMutation = useMutation({
     mutationFn: (newTask) => api.post('/tarefas', { ...newTask, project_id: selectedProjectId }),
     onSuccess: () => {
-      // O cache será invalidado via socket se o backend emitir, 
-      // mas mantemos aqui para feedback instantâneo local
       queryClient.invalidateQueries({ queryKey: ['tasks', selectedProjectId] })
       toast.success('Tarefa criada com sucesso!')
       setFormValues({ title: '', description: '' })
@@ -293,18 +324,42 @@ export default function ProjectDashboard() {
             <p>Organize suas tarefas pessoais por estágio e acompanhe o progresso.</p>
           </div>
 
-          <div className="project-selector-wrapper">
-            <label htmlFor="project-select">Projeto Atual:</label>
+          <div className="project-selector-wrapper flex items-center gap-2">
+            <label htmlFor="project-select">Projeto:</label>
             <select
               id="project-select"
               value={selectedProjectId || ''}
               onChange={(e) => setSelectedProjectId(Number(e.target.value))}
               className="project-select"
             >
+              {projects.length === 0 && <option value="">Nenhum projeto cadastrado</option>}
               {projects.map(p => (
                 <option key={p.id} value={p.id}>{p.title}</option>
               ))}
             </select>
+            <button
+              type="button"
+              className="ghost-button"
+              title="Criar novo projeto"
+              onClick={() => setIsNewProjectModalOpen(true)}
+            >
+              + Novo Projeto
+            </button>
+            {selectedProjectId && (
+              <button
+                type="button"
+                className="danger-button"
+                title="Excluir este projeto"
+                onClick={() => {
+                  if (window.confirm('Tem certeza que deseja excluir este projeto e todas as suas tarefas?')) {
+                    deleteProjectMutation.mutate(selectedProjectId)
+                  }
+                }}
+                disabled={deleteProjectMutation.isPending}
+              >
+                {deleteProjectMutation.isPending ? 'Excluindo...' : 'Excluir Projeto'}
+              </button>
+            )}
           </div>
 
           <button type="button" className="logout-button" onClick={logout}>
@@ -436,6 +491,52 @@ export default function ProjectDashboard() {
           ))}
         </section> board
       </div> dashboard-container
+
+      {isNewProjectModalOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-card">
+            <button type="button" className="modal-close" onClick={() => setIsNewProjectModalOpen(false)}>×</button>
+            <h2>Novo Projeto</h2>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                const trimmed = newProjectValues.title.trim()
+                if (!trimmed) {
+                  toast.error('Informe o título do projeto')
+                  return
+                }
+                createProjectMutation.mutate({
+                  title: trimmed,
+                  description: newProjectValues.description.trim() || null
+                })
+              }}
+              className="modal-form"
+            >
+              <label>Título do Projeto</label>
+              <input
+                type="text"
+                placeholder="Ex.: Lançamento do Produto"
+                value={newProjectValues.title}
+                onChange={(e) => setNewProjectValues(v => ({ ...v, title: e.target.value }))}
+                required
+              />
+              <label>Descrição (opcional)</label>
+              <textarea
+                rows={3}
+                placeholder="Detalhes ou metas do projeto"
+                value={newProjectValues.description}
+                onChange={(e) => setNewProjectValues(v => ({ ...v, description: e.target.value }))}
+              />
+              <div className="modal-actions">
+                <button type="button" className="ghost-button" onClick={() => setIsNewProjectModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="primary-button" disabled={createProjectMutation.isPending}>
+                  {createProjectMutation.isPending ? 'Criando...' : 'Criar Projeto'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {editingTicket && (
         <div className="modal-overlay" role="dialog" aria-modal="true">
